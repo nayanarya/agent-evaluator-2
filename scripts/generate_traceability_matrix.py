@@ -20,7 +20,7 @@ class TraceabilityMatrixGenerator:
         verification_file = self.compliance_dir / "traceability-verification.json"
         
         if not verification_file.exists():
-            print("⚠ Traceability verification file not found. Run verify_traceability.py first.")
+            print("[WARN] Traceability verification file not found. Run verify_traceability.py first.")
             return
         
         with open(verification_file, 'r') as f:
@@ -29,13 +29,13 @@ class TraceabilityMatrixGenerator:
         matrix = self.create_matrix(traceability_data)
         
         output_file = self.compliance_dir / "traceability-matrix.json"
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(matrix, f, indent=2)
         
         html_output = self.compliance_dir / "traceability-matrix.html"
         self.generate_html_matrix(matrix, html_output)
         
-        print(f"✓ Traceability matrix generated:")
+        print(f"[OK] Traceability matrix generated:")
         print(f"  - JSON: {output_file}")
         print(f"  - HTML: {html_output}")
         
@@ -217,7 +217,7 @@ class TraceabilityMatrixGenerator:
 </html>
 """
         
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html)
 
 if __name__ == "__main__":

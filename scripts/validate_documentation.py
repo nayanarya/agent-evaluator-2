@@ -35,16 +35,16 @@ class DocumentationValidator:
             result = self.validate_document(doc_path, description)
             validation_results.append(result)
             
-            status_icon = "✓" if result['exists'] else "✗"
+            status_icon = "[OK]" if result['exists'] else "[MISS]"
             print(f"{status_icon} {doc_path}: {description}")
         
         report = self.generate_report(validation_results)
         
         output_file = self.compliance_dir / "documentation-validation.json"
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2)
         
-        print(f"\n✓ Documentation validation complete: {output_file}")
+        print(f"\n[OK] Documentation validation complete: {output_file}")
         return report
     
     def validate_document(self, doc_path, description):

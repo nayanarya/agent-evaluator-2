@@ -22,7 +22,7 @@ class ComplianceGate:
         dashboard_file = self.compliance_dir / "compliance-dashboard.json"
         
         if not dashboard_file.exists():
-            print("❌ GATE FAILED: Compliance dashboard not found")
+            print("[FAIL] GATE FAILED: Compliance dashboard not found")
             print("Run generate_compliance_dashboard.py first")
             return False
         
@@ -38,11 +38,11 @@ class ComplianceGate:
         gate_passed = overall_score >= self.min_score
         
         if gate_passed:
-            print(f"\n✅ GATE PASSED: Compliance score ({overall_score}%) meets minimum requirement ({self.min_score}%)")
+            print(f"\n[PASS] GATE PASSED: Compliance score ({overall_score}%) meets minimum requirement ({self.min_score}%)")
             self.print_summary(dashboard)
             return True
         else:
-            print(f"\n❌ GATE FAILED: Compliance score ({overall_score}%) below minimum requirement ({self.min_score}%)")
+            print(f"\n[FAIL] GATE FAILED: Compliance score ({overall_score}%) below minimum requirement ({self.min_score}%)")
             self.print_gaps(dashboard)
             return False
     
@@ -53,21 +53,21 @@ class ComplianceGate:
         
         if "riskManagement" in sections:
             rm = sections["riskManagement"]
-            print(f"✓ Risk Management: {rm.get('overallRiskLevel', 'N/A')}")
+            print(f"[OK] Risk Management: {rm.get('overallRiskLevel', 'N/A')}")
         
         if "traceability" in sections:
             tr = sections["traceability"]
-            print(f"✓ Traceability: {tr.get('traceabilityPercentage', 'N/A')}%")
+            print(f"[OK] Traceability: {tr.get('traceabilityPercentage', 'N/A')}%")
         
         if "documentation" in sections:
             doc = sections["documentation"]
-            print(f"✓ Documentation: {doc.get('completeness', 'N/A')}%")
+            print(f"[OK] Documentation: {doc.get('completeness', 'N/A')}%")
         
         if "vulnerabilities" in sections:
             vuln = sections["vulnerabilities"]
             critical = vuln.get('critical', 0)
             high = vuln.get('high', 0)
-            print(f"✓ Security: {critical} critical, {high} high vulnerabilities")
+            print(f"[OK] Security: {critical} critical, {high} high vulnerabilities")
     
     def print_gaps(self, dashboard):
         """Print compliance gaps"""

@@ -20,13 +20,13 @@ class ComplianceDashboardGenerator:
         dashboard_data = self.aggregate_compliance_data()
         
         json_output = self.compliance_dir / "compliance-dashboard.json"
-        with open(json_output, 'w') as f:
+        with open(json_output, 'w', encoding='utf-8') as f:
             json.dump(dashboard_data, f, indent=2)
         
         html_output = self.compliance_dir / "compliance-dashboard.html"
         self.generate_html_dashboard(dashboard_data, html_output)
         
-        print(f"✓ Compliance dashboard generated:")
+        print(f"[OK] Compliance dashboard generated:")
         print(f"  - JSON: {json_output}")
         print(f"  - HTML: {html_output}")
         
@@ -476,7 +476,7 @@ class ComplianceDashboardGenerator:
 </html>
 """
         
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html)
 
 if __name__ == "__main__":

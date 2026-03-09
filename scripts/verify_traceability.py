@@ -21,10 +21,10 @@ class TraceabilityVerifier:
         traceability = self.build_traceability_matrix(requirements)
         
         output_file = self.compliance_dir / "traceability-verification.json"
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(traceability, f, indent=2)
         
-        print(f"✓ Traceability verification complete: {output_file}")
+        print(f"[OK] Traceability verification complete: {output_file}")
         
         self.print_summary(traceability)
         return traceability

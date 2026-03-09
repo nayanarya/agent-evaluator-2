@@ -30,10 +30,10 @@ class RiskAnalyzer:
         risk_report = self.generate_risk_report(risks)
         
         output_file = self.compliance_dir / "risk-analysis.json"
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(risk_report, f, indent=2)
         
-        print(f"✓ Risk analysis complete: {output_file}")
+        print(f"[OK] Risk analysis complete: {output_file}")
         return risk_report
     
     def identify_risks(self):

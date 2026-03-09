@@ -19,7 +19,7 @@ class RiskMitigationVerifier:
         
         risk_file = self.compliance_dir / "risk-analysis.json"
         if not risk_file.exists():
-            print("⚠ Risk analysis file not found. Run risk_analyzer.py first.")
+            print("[WARN] Risk analysis file not found. Run risk_analyzer.py first.")
             return
         
         with open(risk_file, 'r') as f:
@@ -31,7 +31,7 @@ class RiskMitigationVerifier:
             result = self.verify_risk(risk)
             verification_results.append(result)
             
-            status_icon = "✓" if result['verified'] else "✗"
+            status_icon = "[OK]" if result['verified'] else "[FAIL]"
             print(f"{status_icon} {risk['id']}: {risk['description']}")
         
         report = {
@@ -42,10 +42,10 @@ class RiskMitigationVerifier:
         }
         
         output_file = self.compliance_dir / "risk-mitigation-verification.json"
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(report, f, indent=2)
         
-        print(f"\n✓ Verification complete: {output_file}")
+        print(f"\n[OK] Verification complete: {output_file}")
         return report
     
     def verify_risk(self, risk):
@@ -78,7 +78,7 @@ class RiskMitigationVerifier:
         
         for file in agent_files:
             if Path(file).exists():
-                with open(file, 'r') as f:
+                with open(file, 'r', encoding='utf-8') as f:
                     content = f.read()
                     if 'error' in content.lower() and 'catch' in content.lower():
                         return True
@@ -90,7 +90,7 @@ class RiskMitigationVerifier:
         gitignore = Path(".gitignore").exists()
         
         if gitignore:
-            with open(".gitignore", 'r') as f:
+            with open(".gitignore", 'r', encoding='utf-8') as f:
                 gitignore_content = f.read()
                 if '.env' in gitignore_content:
                     return True
@@ -101,7 +101,7 @@ class RiskMitigationVerifier:
         """Verify error handling implementation"""
         server_file = Path("server.js")
         if server_file.exists():
-            with open(server_file, 'r') as f:
+            with open(server_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 has_try_catch = 'try' in content and 'catch' in content
                 has_error_response = 'error' in content.lower()
@@ -112,7 +112,7 @@ class RiskMitigationVerifier:
         """Verify input validation exists"""
         server_file = Path("server.js")
         if server_file.exists():
-            with open(server_file, 'r') as f:
+            with open(server_file, 'r', encoding='utf-8') as f:
                 content = f.read()
                 if 'userInput' in content and ('trim' in content or 'validation' in content.lower()):
                     return True
