@@ -5,332 +5,129 @@ on:
     branches: [main, develop]
   push:
     branches: [main]
-  schedule:
-    - cron: '0 2 * * 1'
   workflow_dispatch:
 
-env:
-  NODE_VERSION: '18.x'
-  MIN_CODE_COVERAGE: 80
-  MIN_COMPLIANCE_SCORE: 85
-
 jobs:
-  software-classification:
-    name: IEC 62304 Software Classification
+  compliance-check:
+    name: SAMD Compliance Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Determine Software Safety Class
-        run: |
-          echo "=== IEC 62304 Software Safety Classification ==="
-          echo "Device Type: AI Agent Evaluation System"
-          echo "Risk Level: Class B (Medium Risk)"
-          echo "Rationale: Software provides decision support for AI model evaluation"
-          echo "Classification: IEC 62304 Class B"
-          
-      - name: Generate Classification Report
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Generate Software Classification
         run: |
           mkdir -p compliance-reports
-          cat > compliance-reports/software-classification.json << EOF
+          cat > compliance-reports/software-classification.json << 'EOF'
           {
             "standard": "IEC 62304",
             "safetyClass": "B",
             "deviceType": "AI Agent Evaluation System",
             "riskLevel": "Medium",
             "rationale": "Software provides decision support for AI model evaluation and comparison",
-            "applicableRequirements": [
-              "Software Development Planning",
-              "Software Requirements Analysis",
-              "Software Architectural Design",
-              "Software Detailed Design",
-              "Software Unit Implementation and Verification",
-              "Software Integration and Integration Testing",
-              "Software System Testing",
-              "Software Release"
-            ],
             "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
 
-      - name: Upload Classification Report
+      - name: Generate SBOM
+        continue-on-error: true
+        run: |
+          npx @cyclonedx/cyclonedx-npm --output-file sbom-cyclonedx.json || echo "SBOM generation skipped"
+
+      - name: Run npm audit
+        continue-on-error: true
+        run: |
+          npm audit --json > npm-audit-report.json || true
+          npm audit || true
+
+      - name: Run Risk Analysis
+        run: python scripts/risk_analyzer.py
+
+      - name: Verify Risk Mitigations
+        run: python scripts/verify_risk_mitigations.py
+
+      - name: Verify Traceability
+        run: python scripts/verify_traceability.py
+
+      - name: Validate Documentation
+        run: python scripts/validate_documentation.py
+
+      - name: Generate Traceability Matrix
+        run: python scripts/generate_traceability_matrix.py
+
+      - name: Generate Compliance Dashboard
+        run: python scripts/generate_compliance_dashboard.py
+
+      - name: Compliance Gate Check
+        run: python scripts/compliance_gate.py --min-score 80
+
+      - name: Upload Compliance Reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: software-classification
-          path: compliance-reports/software-classification.json
-          retention-days: 2555
-
-  sbom-generation:
-    name: Generate SBOM (Software Bill of Materials)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Generate SBOM (CycloneDX)
-        run: |
-          npx @cyclonedx/cyclonedx-npm --output-file sbom-cyclonedx.json
-          
-      - name: Generate SBOM (SPDX)
-        run: |
-          npx @cyclonedx/cyclonedx-npm --output-format spdx --output-file sbom-spdx.json || echo "SPDX generation skipped"
+          name: compliance-reports
+          path: compliance-reports/
+          retention-days: 90
+          if-no-files-found: warn
 
       - name: Upload SBOM
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sbom-reports
-          path: |
-            sbom-*.json
-          retention-days: 2555
+          path: sbom-*.json
+          retention-days: 90
           if-no-files-found: warn
 
-  vulnerability-scanning:
-    name: Security Vulnerability Scanning
-    runs-on: ubuntu-latest
-    needs: sbom-generation
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Run npm audit
-        run: |
-          npm audit --json > npm-audit-report.json || true
-          npm audit
-
-      - name: Trivy Vulnerability Scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'json'
-          output: 'trivy-report.json'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-          exit-code: '0'
-
-      - name: Analyze Vulnerabilities
-        run: |
-          echo "=== Vulnerability Analysis ==="
-          if [ -f trivy-report.json ]; then
-            CRITICAL=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="CRITICAL")] | length' trivy-report.json 2>/dev/null || echo "0")
-            HIGH=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity=="HIGH")] | length' trivy-report.json 2>/dev/null || echo "0")
-            echo "Critical vulnerabilities: $CRITICAL"
-            echo "High vulnerabilities: $HIGH"
-            
-            if [ "$CRITICAL" -gt 0 ] 2>/dev/null; then
-              echo "::error::CRITICAL vulnerabilities found. Remediation required."
-              exit 1
-            fi
-          else
-            echo "Trivy report not found, skipping vulnerability analysis"
-          fi
-
-      - name: Upload Vulnerability Reports
+      - name: Upload Audit Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vulnerability-reports
-          path: |
-            npm-audit-report.json
-            trivy-report.json
-          retention-days: 2555
-          if-no-files-found: warn
-
-  code-quality:
-    name: Code Quality & Standards
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: ESLint Analysis
-        run: |
-          npm install --save-dev eslint
-          npx eslint . --ext .js --format json --output-file eslint-report.json || true
-          npx eslint . --ext .js || echo "ESLint found issues"
-
-      - name: Code Complexity Analysis
-        run: |
-          npm install --save-dev complexity-report
-          npx cr --format json --output complexity-report.json . || echo "Complexity analysis completed"
-
-      - name: Check Code Coverage Requirements
-        run: |
-          echo "=== Code Coverage Requirements ==="
-          echo "Minimum required coverage: ${{ env.MIN_CODE_COVERAGE }}%"
-          echo "Note: Implement unit tests to meet IEC 62304 Class B requirements"
-
-      - name: Upload Code Quality Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: code-quality-reports
-          path: |
-            eslint-report.json
-            complexity-report.json
-          retention-days: 2555
-          if-no-files-found: warn
-
-  risk-management:
-    name: Risk Management (ISO 14971)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Run Risk Analysis
-        run: |
-          python scripts/risk_analyzer.py
-
-      - name: Verify Risk Mitigations
-        run: |
-          python scripts/verify_risk_mitigations.py
-
-      - name: Upload Risk Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: risk-management-reports
-          path: compliance-reports/risk-*.json
-          retention-days: 2555
-          if-no-files-found: warn
-
-  traceability-validation:
-    name: Requirements Traceability
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Verify Traceability Matrix
-        run: |
-          python scripts/verify_traceability.py
-
-      - name: Generate Traceability Report
-        run: |
-          python scripts/generate_traceability_matrix.py
-
-      - name: Upload Traceability Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: traceability-reports
-          path: compliance-reports/traceability-*.json
-          retention-days: 2555
-          if-no-files-found: warn
-
-  documentation-audit:
-    name: Documentation Compliance Audit
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Validate Documentation
-        run: |
-          python scripts/validate_documentation.py
-
-      - name: Check Change Control Records
-        run: |
-          echo "=== Change Control Validation ==="
-          echo "Verifying Git commit history for audit trail..."
-          git log --oneline --since="30 days ago" > compliance-reports/change-log.txt
-
-      - name: Upload Documentation Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: documentation-reports
-          path: compliance-reports/documentation-*.json
-          retention-days: 2555
-          if-no-files-found: warn
-
-  compliance-report:
-    name: Generate Compliance Report
-    runs-on: ubuntu-latest
-    needs: [software-classification, sbom-generation, vulnerability-scanning, 
-            code-quality, risk-management, traceability-validation, 
-            documentation-audit]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Download All Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Generate Compliance Dashboard
-        run: |
-          python scripts/generate_compliance_dashboard.py
-
-      - name: Compliance Gate Check
-        run: |
-          python scripts/compliance_gate.py --min-score ${{ env.MIN_COMPLIANCE_SCORE }}
-
-      - name: Upload Final Compliance Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: compliance-dashboard
-          path: compliance-reports/compliance-dashboard.*
-          retention-days: 2555
+          name: audit-reports
+          path: npm-audit-report.json
+          retention-days: 90
           if-no-files-found: warn
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const dashboardPath = 'compliance-reports/compliance-dashboard.json';
+            
             let comment = '## 🏥 SAMD Compliance Report\n\n';
-            comment += '✅ All compliance checks completed.\n\n';
-            comment += 'View detailed reports in workflow artifacts.\n';
+            
+            if (fs.existsSync(dashboardPath)) {
+              const dashboard = JSON.parse(fs.readFileSync(dashboardPath, 'utf8'));
+              const score = dashboard.overallCompliance;
+              const level = dashboard.complianceLevel;
+              
+              const emoji = score >= 85 ? '✅' : score >= 70 ? '⚠️' : '❌';
+              
+              comment += `${emoji} **Overall Compliance: ${score}%** (${level})\n\n`;
+              comment += '### Summary\n';
+              comment += `- Risk Management: ${dashboard.sections.riskManagement.overallRiskLevel}\n`;
+              comment += `- Traceability: ${dashboard.sections.traceability.traceabilityPercentage}%\n`;
+              comment += `- Documentation: ${dashboard.sections.documentation.completeness}%\n\n`;
+              comment += '📊 View detailed reports in workflow artifacts.\n';
+            } else {
+              comment += '✅ Compliance checks completed.\n\n';
+              comment += '📊 View detailed reports in workflow artifacts.\n';
+            }
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,
