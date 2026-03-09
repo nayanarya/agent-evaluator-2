@@ -1,0 +1,91 @@
+name: Quick Compliance Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+jobs:
+  quick-check:
+    name: Quick Compliance Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Risk Analysis
+        run: python scripts/risk_analyzer.py
+
+      - name: Verify Risk Mitigations
+        run: python scripts/verify_risk_mitigations.py
+
+      - name: Validate Documentation
+        run: python scripts/validate_documentation.py
+
+      - name: Verify Traceability
+        run: python scripts/verify_traceability.py
+
+      - name: Generate Reports
+        run: |
+          python scripts/generate_traceability_matrix.py
+          python scripts/generate_compliance_dashboard.py
+
+      - name: Compliance Gate Check
+        run: python scripts/compliance_gate.py --min-score 80
+
+      - name: Upload Compliance Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-compliance-reports
+          path: compliance-reports/
+          retention-days: 90
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const dashboardPath = 'compliance-reports/compliance-dashboard.json';
+            
+            let comment = '## 🏥 Quick Compliance Check\n\n';
+            
+            if (fs.existsSync(dashboardPath)) {
+              const dashboard = JSON.parse(fs.readFileSync(dashboardPath, 'utf8'));
+              const score = dashboard.overallCompliance;
+              const level = dashboard.complianceLevel;
+              
+              const emoji = score >= 85 ? '✅' : score >= 70 ? '⚠️' : '❌';
+              
+              comment += `${emoji} **Overall Compliance: ${score}%** (${level})\n\n`;
+              comment += '### Summary\n';
+              comment += `- Risk Management: ${dashboard.sections.riskManagement.overallRiskLevel}\n`;
+              comment += `- Traceability: ${dashboard.sections.traceability.traceabilityPercentage}%\n`;
+              comment += `- Documentation: ${dashboard.sections.documentation.completeness}%\n`;
+              comment += `- Security: ${dashboard.sections.vulnerabilities.critical} critical vulnerabilities\n\n`;
+              comment += 'View detailed reports in workflow artifacts.\n';
+            } else {
+              comment += '⚠️ Compliance dashboard not generated. Check workflow logs.\n';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
